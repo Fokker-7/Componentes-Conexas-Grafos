@@ -134,7 +134,9 @@ def tarjan_dirigido(matriz, n):
     componentes = []
     visitados = set()
 
-    def snap(fase, texto, tipo, actual=None, comp_actual=(), completas=(), vecino=None):
+    def snap(fase, texto, tipo, actual=None, comp_actual=(), completas=None, vecino=None):
+        if completas is None:
+            completas = componentes
         pasos.append({
             "fase": fase,
             "texto": texto,
@@ -143,7 +145,7 @@ def tarjan_dirigido(matriz, n):
             "vecino": vecino,
             "pila": list(pila),
             "visitados": set(visitados),
-            "completas": [list(c) for c in completas] if completas else [list(c) for c in componentes],
+            "completas": [list(c) for c in completas],
             "comp_actual": list(comp_actual),
         })
 
@@ -156,45 +158,45 @@ def tarjan_dirigido(matriz, n):
         en_pila[u] = True
         visitados.add(u)
         
-        snap("Descubrimiento", f"Visitando {nom(u)}. Se le asigna ID de descubrimiento y low-link = {dfn[u]}. Se apila.", "visita", u, pila)
+        snap("Descubrimiento", f"Visitando {nom(u)}. Se le asigna ID de descubrimiento y low-link = {dfn[u]}. Se apila.", "visita", actual=u)
 
         vecinos = [j for j in range(n) if matriz[u][j] == 1]
         if not vecinos:
-            snap("Exploración", f"{nom(u)} no tiene aristas de salida.", "aislado", u, pila)
+            snap("Exploración", f"{nom(u)} no tiene aristas de salida.", "aislado", actual=u)
 
         for v in vecinos:
             if dfn[v] == -1:
-                snap("Avance", f"Arco {nom(u)} → {nom(v)}: vecino no visitado, se avanza recursivamente.", "apila", u, pila, v)
+                snap("Avance", f"Arco {nom(u)} → {nom(v)}: vecino no visitado, se avanza recursivamente.", "apila", actual=u, vecino=v)
                 dfs(v)
                 low[u] = min(low[u], low[v])
-                snap("Retroceso", f"Regreso en {nom(u)} tras explorar {nom(v)}. Se actualiza low[{nom(u)}] = min({low[u]}, {low[v]}).", "actualiza", u, pila, v)
+                snap("Retroceso", f"Regreso en {nom(u)} tras explorar {nom(v)}. Se actualiza low[{nom(u)}] = min({low[u]}, {low[v]}).", "actualiza", actual=u, vecino=v)
             elif en_pila[v]:
                 low[u] = min(low[u], dfn[v])
-                snap("Arco de retroceso", f"Arco {nom(u)} → {nom(v)}: {nom(v)} ya está en la pila (ciclo detectado). low[{nom(u)}] = min({low[u]}, dfn[{nom(v)}]).", "actualiza", u, pila, v)
+                snap("Arco de retroceso", f"Arco {nom(u)} → {nom(v)}: {nom(v)} ya está en la pila (ciclo detectado). low[{nom(u)}] = min({low[u]}, dfn[{nom(v)}]).", "actualiza", actual=u, vecino=v)
             else:
-                snap("Cruce", f"Arco {nom(u)} → {nom(v)}: {nom(v)} ya pertenece a una componente cerrada. Se ignora.", "ignora", u, pila, v)
+                snap("Cruce", f"Arco {nom(u)} → {nom(v)}: {nom(v)} ya pertenece a una componente cerrada. Se ignora.", "ignora", actual=u, vecino=v)
 
         if low[u] == dfn[u]:
             comp = []
-            snap("Cierre de Componente", f"Raíz de componente detectada en {nom(u)} (ID == low == {dfn[u]}). Extrayendo nodos de la pila...", "cierre_inicio", u, pila)
+            snap("Cierre de Componente", f"Raíz de componente detectada en {nom(u)} (ID == low == {dfn[u]}). Extrayendo nodos de la pila...", "cierre_inicio", actual=u)
             while True:
                 w = pila.pop()
                 en_pila[w] = False
                 comp.append(w)
                 if w == u:
                     break
-            componentes.append(sorted(comp))
-            nombres = ", ".join(nom(x) for x in sorted(comp))
-            snap("Componente consolidada", f"Componente extraída: {{{nombres}}}.", "cierre", u, comp)
+            comp_sorted = sorted(comp)
+            componentes.append(comp_sorted)
+            nombres = ", ".join(nom(x) for x in comp_sorted)
+            snap("Componente consolidada", f"Componente extraída: {{{nombres}}}.", "cierre", actual=u, comp_actual=comp_sorted)
 
     for i in range(n):
         if dfn[i] == -1:
-            snap("Nueva Búsqueda", f"Iniciando recorrido DFS desde el vértice no visitado {nom(i)}.", "nueva", i)
+            snap("Nueva Búsqueda", f"Iniciando recorrido DFS desde el vértice no visitado {nom(i)}.", "nueva", actual=i)
             dfs(i)
 
     snap("Fin", f"Algoritmo de Tarjan finalizado: se identificaron {len(componentes)} componentes.", "fin")
     return componentes, pasos
-
 
 st.session_state.setdefault("edges", set())
 st.session_state.setdefault("n_anterior", None)
@@ -244,7 +246,7 @@ else:
     st.markdown(
         "Marca las casillas para crear conexiones. "
         "En modo **No dirigido** la conexión es bidireccional (`A—B`). En modo **Dirigido** "
-        "la conexión tiene un sentido específico (`A→B`). Ahora **puedes marcar lazos** (`A→A`)."
+        "la conexión tiene un sentido específico (`A→B`)."
     )
 
     def alternar_arista(origen, destino):
