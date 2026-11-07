@@ -6,14 +6,13 @@ import pandas as pd
 import streamlit as st
 from matplotlib.colors import to_hex
 
+# CONFIGURACIÓN DE PÁGINA Y ESTILOS
 st.set_page_config(page_title="Componentes Conexas de un Grafo", layout="wide")
 
 st.markdown(
     """
     <style>
     [data-testid="stElementToolbar"] { display: none; }
-    
-    /* Estilo de tarjeta para los checkboxes */
     [data-testid="stCheckbox"] {
         background-color: #f3f4f6;
         padding: 6px 10px;
@@ -34,6 +33,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# FUNCIONES AUXILIARES
 def titulo(texto, nivel=1):
     nivel = max(1, min(nivel, 6))
     st.markdown(f"<h{nivel}>{texto}</h{nivel}>", unsafe_allow_html=True)
@@ -63,6 +63,7 @@ def generar_aristas_aleatorias(n, p, dirigido):
                     aristas.add((i, j))
     return aristas
 
+# ALGORITMOS (DFS Y TARJAN)
 def dfs_no_dirigido(matriz, n, inicio_elegido):
     orden = [inicio_elegido] + [v for v in range(n) if v != inicio_elegido]
     visitados = set()
@@ -124,6 +125,26 @@ def dfs_no_dirigido(matriz, n, inicio_elegido):
     snap(f"Algoritmo finalizado: se identificaron {len(componentes)} componentes conexas.", "fin")
     return componentes, pasos
 
+def dfs_silencioso_no_dirigido(matriz, n):
+    visitados = set()
+    num_componentes = 0
+    for i in range(n):
+        if i not in visitados:
+            num_componentes += 1
+            pila = [i]
+            while pila:
+                actual = pila.pop()
+                if actual not in visitados:
+                    visitados.add(actual)
+                    for j in range(n):
+                        if matriz[actual][j] == 1 and j not in visitados:
+                            pila.append(j)
+    return num_componentes
+
+def componentes_debiles(matriz, n):
+    matriz_no_dir = np.maximum(matriz, matriz.T)
+    return dfs_silencioso_no_dirigido(matriz_no_dir, n)
+
 def tarjan_dirigido(matriz, n):
     pasos = []
     dfn = [-1] * n
@@ -132,7 +153,6 @@ def tarjan_dirigido(matriz, n):
     pila = []
     tiempo = [0]
     componentes = []
-    visitados = set()
 
     def snap(fase, texto, tipo, actual=None, comp_actual=(), completas=None, vecino=None):
         if completas is None:
@@ -144,7 +164,7 @@ def tarjan_dirigido(matriz, n):
             "actual": actual,
             "vecino": vecino,
             "pila": list(pila),
-            "visitados": set(visitados),
+            "visitados": set(i for i in range(n) if dfn[i] != -1),
             "completas": [list(c) for c in completas],
             "comp_actual": list(comp_actual),
         })
@@ -156,7 +176,6 @@ def tarjan_dirigido(matriz, n):
         tiempo[0] += 1
         pila.append(u)
         en_pila[u] = True
-        visitados.add(u)
         
         snap("Descubrimiento", f"Visitando {nom(u)}. Se le asigna ID de descubrimiento y low-link = {dfn[u]}. Se apila.", "visita", actual=u)
 
@@ -195,7 +214,7 @@ def tarjan_dirigido(matriz, n):
             snap("Nueva Búsqueda", f"Iniciando recorrido DFS desde el vértice no visitado {nom(i)}.", "nueva", actual=i)
             dfs(i)
 
-    snap("Fin", f"Algoritmo de Tarjan finalizado: se identificaron {len(componentes)} componentes.", "fin")
+    snap("Fin", f"Algoritmo de Tarjan finalizado: se identificaron {len(componentes)} componentes fuertemente conexas (SCC).", "fin")
     return componentes, pasos
 
 st.session_state.setdefault("edges", set())
@@ -204,6 +223,7 @@ st.session_state.setdefault("paso", 0)
 st.session_state.setdefault("firma", None)
 st.session_state.setdefault("firma_aleatoria", None)
 
+# INTERFAZ
 titulo("Componentes Conexas de un Grafo", 1)
 st.markdown(
     "Define un grafo (dirigido o no dirigido), visualiza su matriz de adyacencia y "
@@ -228,6 +248,7 @@ if st.session_state.n_anterior != n:
 nodos = list(range(n))
 etiquetas = [nom(i) for i in nodos]
 
+# CONSTRUCCIÓN DEL GRAFO
 titulo("2. Construcción del grafo", 2)
 
 if modo == "Aleatorio":
@@ -286,6 +307,7 @@ else:
                     label_visibility="visible"
                 )
 
+# CONSTRUCCIÓN DE DATASTRUCTURES DE GRAFO
 aristas = sorted(st.session_state.edges)
 matriz = construir_matriz(n, aristas, es_dirigido)
 
@@ -297,6 +319,8 @@ PALETA = plt.get_cmap("tab10")
 GRIS = "#E5E7EB"
 AZUL = "#93C5FD"
 pos = nx.circular_layout(G)
+
+# FUNCIONES DE RENDERIZADO VISUAL
 
 def dibujar_grafo(colores_nodos, actual=None, vecino=None):
     fig, ax = plt.subplots(figsize=(5, 5))
@@ -355,6 +379,8 @@ def indicador_color(color_hex):
         f"border:1px solid #374151;border-radius:3px;margin-right:6px;vertical-align:middle'></span>"
     )
 
+# MATRIZ DE ADYACENCIA
+
 titulo("3. Matriz de Adyacencia", 2)
 col_m, col_p = st.columns([3, 2])
 with col_m:
@@ -364,18 +390,22 @@ with col_m:
 with col_p:
     mostrar_figura(dibujar_grafo([AZUL] * n))
 
+# EJECUCIÓN DEL ALGORITMO
+
 titulo("4. Ejecución interactiva del algoritmo", 2)
 
-col_ctrl1, col_ctrl2 = st.columns([2, 2])
-with col_ctrl1:
-    inicio_elegido = st.selectbox("Vértice inicial del recorrido", nodos, format_func=nom, disabled=es_dirigido)
-    if es_dirigido:
-        st.caption("En grafos dirigidos, el orden del algoritmo de Tarjan se rige por la secuencia natural de descubrimiento.")
+inicio_elegido = st.selectbox("Vértice inicial del recorrido", nodos, format_func=nom, disabled=es_dirigido)
+if es_dirigido:
+    st.caption(
+        "En grafos dirigidos, Tarjan calcula las componentes fuertemente conexas (SCC) siguiendo la secuencia natural de descubrimiento. "
+        "La conexidad débil (WCC) se evalúa aparte, ignorando las direcciones, y se muestra en la solución completa."
+    )
 
 if es_dirigido:
     componentes, pasos = tarjan_dirigido(matriz, n)
 else:
     componentes, pasos = dfs_no_dirigido(matriz, n, inicio_elegido)
+
 firma = (n, frozenset(st.session_state.edges), inicio_elegido, es_dirigido)
 if st.session_state.firma != firma:
     st.session_state.firma = firma
@@ -385,6 +415,7 @@ st.session_state.paso = max(0, min(st.session_state.paso, len(pasos) - 1))
 ultimo = len(pasos) - 1
 paso = st.session_state.paso
 
+# BOTONES DE NAVEGACIÓN
 b1, b2, b3, b4, _ = st.columns([1, 1, 1, 1, 2])
 if b1.button("⏮ Inicio", disabled=paso == 0):
     st.session_state.paso = 0
@@ -434,6 +465,8 @@ with col_i:
         st.markdown(f"**Inspección en Matriz (Fila de {nom(estado['actual'])}):**")
         st.dataframe(estilizar_matriz(estado["actual"], estado["vecino"]), use_container_width=True)
 
+# SOLUCIÓN COMPLETA
+
 titulo("5. Solución completa", 2)
 colores_final = {}
 for idx, comp in enumerate(componentes):
@@ -444,20 +477,39 @@ colores_final_nodos = [colores_final[v] for v in G.nodes()]
 col_g2, col_r = st.columns([2, 3])
 with col_g2:
     mostrar_figura(dibujar_grafo(colores_final_nodos))
+    if es_dirigido:
+        st.caption("Los colores corresponden a las componentes fuertemente conexas (SCC).")
 
 with col_r:
-    titulo(f"Componentes Conexas encontradas: {len(componentes)}", 3)
+    if es_dirigido:
+        n_scc = len(componentes)
+        n_wcc = componentes_debiles(matriz, n)
+        titulo(f"Componentes fuertemente conexas (SCC): {n_scc}", 3)
+        titulo(f"Componentes débilmente conexas (WCC): {n_wcc}", 3)
 
-    if len(componentes) == 1:
-        st.success("El grafo es conexo.")
+        if n_scc == 1:
+            st.success("Resultado: El grafo es FUERTEMENTE CONEXO.")
+        elif n_wcc == 1:
+            st.info(
+                f"Resultado: El grafo es DÉBILMENTE CONEXO "
+                f"(se identificaron {n_scc} componentes fuertemente conexas internas)."
+            )
+        else:
+            st.warning("Resultado: El grafo es DISCONEXO (hay partes completamente aisladas).")
     else:
-        st.warning(f"El grafo no es conexo: está segmentado en {len(componentes)} componentes.")
+        titulo(f"Componentes conexas: {len(componentes)}", 3)
 
+        if len(componentes) == 1:
+            st.success("El grafo es conexo.")
+        else:
+            st.warning(f"El grafo no es conexo: está segmentado en {len(componentes)} componentes.")
+
+    etiqueta_grupo = "SCC" if es_dirigido else "Grupo"
     for idx, comp in enumerate(componentes, start=1):
         nombres = ", ".join(nom(x) for x in comp)
         color = to_hex(PALETA((idx - 1) % 10))
         st.markdown(
-            f"{indicador_color(color)}**Grupo {idx}** ({len(comp)} nodo(s)): `{nombres}`",
+            f"{indicador_color(color)}**{etiqueta_grupo} {idx}** ({len(comp)} nodo(s)): `{nombres}`",
             unsafe_allow_html=True,
         )
 
