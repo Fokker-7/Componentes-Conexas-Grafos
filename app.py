@@ -266,16 +266,26 @@ else:
     st.session_state.firma_aleatoria = None
     st.markdown(
         "Marca las casillas para crear conexiones. "
-        "En modo **No dirigido** la conexión es bidireccional (`A—B`). En modo **Dirigido** "
+        "En modo **No dirigido** la conexión es bidireccional (`A—B`): al marcar una casilla "
+        "también se marca su simétrica, por lo que la matriz completa queda simétrica. En modo **Dirigido** "
         "la conexión tiene un sentido específico (`A→B`)."
     )
 
     def alternar_arista(origen, destino):
-        par = (origen, destino)
-        if st.session_state[f"chk_{origen}_{destino}"]:
-            st.session_state.edges.add(par)
+        marcado = st.session_state[f"chk_{origen}_{destino}"]
+        if es_dirigido:
+            par = (origen, destino)
+            if marcado:
+                st.session_state.edges.add(par)
+            else:
+                st.session_state.edges.discard(par)
         else:
-            st.session_state.edges.discard(par)
+            # No dirigido: A—B es la misma conexión que B—A
+            if marcado:
+                st.session_state.edges.add((min(origen, destino), max(origen, destino)))
+            else:
+                st.session_state.edges.discard((origen, destino))
+                st.session_state.edges.discard((destino, origen))
 
     c_btn1, _ = st.columns([1, 4])
     if c_btn1.button("Limpiar todas las conexiones"):
@@ -291,21 +301,22 @@ else:
         fila = st.columns(anchos)
         fila[0].markdown(f"<div style='padding-top:10px;font-weight:bold;color:#1E3A8A;text-align:center'>{nom(i)}</div>", unsafe_allow_html=True)
         for j in range(n):
-            if not es_dirigido and j < i:
-                fila[j + 1].markdown("<div style='text-align:center;color:#D1D5DB;padding-top:10px'>·</div>", unsafe_allow_html=True)
+            simbolo = "→" if es_dirigido else "—"
+            etiqueta = f"{nom(i)}{simbolo}{nom(j)}"
+            if es_dirigido:
+                marcado = (i, j) in st.session_state.edges
             else:
-                par = (i, j)
-                simbolo = "→" if es_dirigido else "—"
-                etiqueta = f"{nom(i)}{simbolo}{nom(j)}"
-                
-                st.session_state[f"chk_{i}_{j}"] = par in st.session_state.edges
-                fila[j + 1].checkbox(
-                    etiqueta,
-                    key=f"chk_{i}_{j}",
-                    on_change=alternar_arista,
-                    args=(i, j),
-                    label_visibility="visible"
-                )
+                # Matriz completa: la casilla (i, j) refleja la misma conexión que (j, i)
+                marcado = (i, j) in st.session_state.edges or (j, i) in st.session_state.edges
+
+            st.session_state[f"chk_{i}_{j}"] = marcado
+            fila[j + 1].checkbox(
+                etiqueta,
+                key=f"chk_{i}_{j}",
+                on_change=alternar_arista,
+                args=(i, j),
+                label_visibility="visible"
+            )
 
 # CONSTRUCCIÓN DE DATASTRUCTURES DE GRAFO
 aristas = sorted(st.session_state.edges)
